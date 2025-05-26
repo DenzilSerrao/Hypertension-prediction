@@ -1,0 +1,34 @@
+|-- .gitignore
+|-- backend
+    |-- app.py
+    |-- Dockerfile
+    |-- model
+        |-- .gitkeep
+        |-- saved_model.pkl
+    |-- requirements.txt
+    |-- training
+        |-- model_training.py
+        |-- personalized_medication_dataset.csv
+|-- eslint.config.js
+|-- index.html
+|-- package-lock.json
+|-- package.json
+|-- postcss.config.js
+|-- README.md
+|-- src
+    |-- App.tsx
+    |-- components
+        |-- About.tsx
+        |-- FeatureImportance.tsx
+        |-- Footer.tsx
+        |-- PredictionForm.tsx
+        |-- ResultDisplay.tsx
+    |-- index.css
+    |-- main.tsx
+    |-- vite-env.d.ts
+|-- start.sh
+|-- tailwind.config.js
+|-- tsconfig.app.json
+|-- tsconfig.json
+|-- tsconfig.node.json
+|-- vite.config.ts
