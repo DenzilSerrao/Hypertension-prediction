@@ -14,7 +14,7 @@ os.makedirs("../model", exist_ok=True)
 
 # Step 2: Load the data
 try:
-    df = pd.read_csv('D:/Programs/Python/ML-1/project/backend/training/personalized_medication_dataset.csv')
+    df = pd.read_csv('./backend/training/personalized_medication_dataset.csv')
 except FileNotFoundError:
     print("Dataset file not found. Using sample data for demonstration.")
 
