@@ -58,67 +58,88 @@ def health_check():
 @app.route('/api/predict', methods=['POST'])
 def predict():
     if model_data is None:
-        return jsonify({
-            'error': 'Model not loaded. Please train the model first.'
-        }), 500
-    
+        logging.error("Model not loaded.")
+        return jsonify({'error': 'Model not loaded. Please train the model first.'}), 500
+
     try:
-        # Get data from request
+        # Step 1: Parse incoming JSON
         data = request.json
-        
-        # Create a DataFrame with a single row
+        logging.info("Received data: %s", data)
+
         input_df = pd.DataFrame([data])
-        
-        # Add derived features
-        if 'BMI' in input_df.columns:
-            input_df['BMI_Category'] = input_df['BMI'].apply(bmi_category)
-        else:
-            # Calculate BMI if not provided
-            if 'Weight_kg' in input_df.columns and 'Height_cm' in input_df.columns:
-                input_df['BMI'] = input_df['Weight_kg'] / ((input_df['Height_cm']/100) ** 2)
-                input_df['BMI_Category'] = input_df['BMI'].apply(bmi_category)
+
+        # Step 2: Derived features
+        if 'BMI' not in input_df.columns:
+            if 'Weight_kg' in input_df and 'Height_cm' in input_df:
+                input_df['BMI'] = input_df['Weight_kg'] / ((input_df['Height_cm'] / 100) ** 2)
             else:
-                return jsonify({'error': 'BMI or Weight and Height must be provided'}), 400
-        
+                return jsonify({'error': 'Provide BMI or (Weight_kg and Height_cm).'}), 400
+
+        input_df['BMI_Category'] = input_df['BMI'].apply(bmi_category)
         input_df['Age_Group'] = input_df['Age'].apply(age_group)
-        
-        # Select and order features to match the model's expected input
+        logging.info("Derived features added: BMI_Category, Age_Group")
+
+        # Step 3: Select & order features
         feature_names = model_data['feature_names']
         X = input_df[feature_names].copy()
-        
-        # Encode categorical features
-        encoders = model_data['encoders']
-        for col, encoder in encoders.items():
-            if col in X.columns:
-                # Handle unseen categories
-                try:
-                    X[col] = encoder.transform(X[col].astype(str))
-                except ValueError:
-                    # If category not seen during training, use a default value (e.g., most common)
-                    X[col] = encoder.transform([encoder.classes_[0]])[0]
-        
-        # Scale features
+        logging.info("Selected features: %s", X.columns.tolist())
+
+        # Step 4: Encode categorical features
+        for col, le in model_data['encoders'].items():
+            if col in X:
+                original_vals = X[col].astype(str).tolist()
+                safe_vals = []
+                for val in original_vals:
+                    if val in le.classes_:
+                        safe_vals.append(val)
+                    else:
+                        logging.warning(f"Unseen category '{val}' in column '{col}', using fallback '{le.classes_[0]}'")
+                        safe_vals.append(le.classes_[0])
+                X[col] = le.transform(safe_vals)
+        logging.info("Categorical encoding complete")
+
+        # Step 5: Scaling
         scaler = model_data['scaler']
         X_scaled = scaler.transform(X)
-        
-        # Make prediction
+        logging.info("Feature scaling applied")
+
+        # Step 6: Predict
         model = model_data['model']
-        prediction_proba = model.predict_proba(X_scaled)[0][1]  # Probability of class 1
+        prediction_proba = model.predict_proba(X_scaled)[0][1]
         prediction = 1 if prediction_proba >= 0.5 else 0
-        
-        # Create response
+        logging.info(f"Prediction: {prediction}, Probability: {prediction_proba}")
+
+        # Optional: Compute full metrics (if ground truth 'Outcome' provided)
+        metrics = {}
+        if 'Outcome' in input_df.columns:
+            from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+            y_true = [input_df['Outcome'].values[0]]
+            y_pred = [prediction]
+            y_prob = [prediction_proba]
+            metrics = {
+                'accuracy': accuracy_score(y_true, y_pred),
+                'precision': precision_score(y_true, y_pred, zero_division=0),
+                'recall': recall_score(y_true, y_pred, zero_division=0),
+                'f1_score': f1_score(y_true, y_pred, zero_division=0),
+                'roc_auc': roc_auc_score(y_true, y_prob)
+            }
+            logging.info("Evaluation metrics computed: %s", metrics)
+
+        # Step 7: Response
         result = {
             'prediction': int(prediction),
             'probability': float(prediction_proba),
             'risk_level': get_risk_level(prediction_proba),
-            'input_data': data
+            'input_data': input_df.iloc[0].to_dict(),
+            'metrics': metrics if metrics else 'N/A'
         }
-        print("Prediction result:", result)  # Debugging output
+        print("Final prediction result:", result)
         return jsonify(result)
-    
+
     except Exception as e:
         logging.exception("Error during prediction")
         return jsonify({'error': str(e)}), 500
+
 
 def get_risk_level(probability):
     if probability < 0.2:

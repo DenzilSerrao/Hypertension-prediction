@@ -40,7 +40,6 @@ dist/
 # Removed *.pkl to allow tracking of saved model files
 *.h5
 *.model
-*.pkl
 
 # Dataset
 *.csv
